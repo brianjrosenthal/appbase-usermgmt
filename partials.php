@@ -20,8 +20,10 @@ function header_html(string $title) {
     $navRight = [];
     if ($u) {
         $navLeft[] = $link('/index.php','Home');
+        
+        // Admin menu goes on the right side
         if (!empty($u['is_admin'])) {
-            $navLeft[] = '<a href="#" id="adminToggle">Admin</a>';
+            $navRight[] = '<a href="#" id="adminToggle">Admin</a>';
         }
         
         // Profile photo placeholder with dropdown menu

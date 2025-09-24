@@ -1,7 +1,7 @@
--- RAG application schema
+-- customgpt application schema
 -- Create DB then use it
--- CREATE DATABASE rag_app DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- USE rag_app;
+CREATE DATABASE customgpt DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE customgpt;
 
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
@@ -34,11 +34,11 @@ CREATE TABLE settings (
 
 -- Default settings
 INSERT INTO settings (key_name, value) VALUES
-  ('site_title', 'RAG Knowledge Base'),
+  ('site_title', 'CustomGPT Knowledge Base'),
   ('announcement', ''),
   ('timezone', 'America/New_York')
 ON DUPLICATE KEY UPDATE value=VALUES(value);
 
 -- Optional: seed an admin user (update email and password hash, then remove)
 INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verified_at)
-VALUES ('Admin','User','admin@example.com','$2y$10$9xH7Jq4v3o6s9k3y8i4rVOyWb0yBYZ5rW.0f9pZ.gG9K6l7lS6b2S',1,NOW());
+VALUES ('Brian','Rosenthal','brian.rosenthal@gmail.com','$2y$10$9xH7Jq4v3o6s9k3y8i4rVOyWb0yBYZ5rW.0f9pZ.gG9K6l7lS6b2S',1,NOW());
