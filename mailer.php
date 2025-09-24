@@ -25,8 +25,16 @@ function send_email_with_error(string $to, string $subject, string $htmlBody, st
             return $response;
         };
 
-        // Create a simple SMTP connection
-        $smtp = fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 30);
+        // Create SMTP connection (SSL or plain)
+        $context = stream_context_create();
+        if (defined('SMTP_SECURE') && SMTP_SECURE === 'ssl') {
+            // SSL connection from the start
+            $smtp = stream_socket_client('ssl://' . SMTP_HOST . ':' . SMTP_PORT, $errno, $errstr, 30, STREAM_CLIENT_CONNECT, $context);
+        } else {
+            // Plain connection (may upgrade to TLS later)
+            $smtp = fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 30);
+        }
+        
         if (!$smtp) {
             $errorMessage = "SMTP connection failed: $errstr ($errno)";
             error_log($errorMessage);

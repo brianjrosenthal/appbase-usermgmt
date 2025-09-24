@@ -53,6 +53,18 @@ header_html('Mail Test');
     <li>Security: <?= defined('SMTP_SECURE') ? h(SMTP_SECURE) : '<em>undefined</em>' ?></li>
     <li>From: <?= defined('SMTP_FROM_EMAIL') && SMTP_FROM_EMAIL ? h(SMTP_FROM_EMAIL) : (defined('SMTP_USER') ? h(SMTP_USER) : '<em>undefined</em>') ?></li>
   </ul>
+  
+  <?php if (defined('SMTP_SECURE') && SMTP_SECURE === 'tls'): ?>
+    <div class="small" style="background: #fff3cd; padding: 8px; border-radius: 4px; margin-top: 8px;">
+      <strong>STARTTLS Troubleshooting:</strong> If you're getting "STARTTLS failed" errors, try these common configurations:
+      <ul style="margin: 4px 0;">
+        <li><strong>Gmail:</strong> SMTP_SECURE = 'ssl', SMTP_PORT = 465</li>
+        <li><strong>Outlook/Hotmail:</strong> SMTP_SECURE = 'tls', SMTP_PORT = 587</li>
+        <li><strong>Yahoo:</strong> SMTP_SECURE = 'ssl', SMTP_PORT = 465</li>
+        <li><strong>Generic:</strong> Try changing SMTP_SECURE from 'tls' to 'ssl'</li>
+      </ul>
+    </div>
+  <?php endif; ?>
   <form method="post" class="stack">
     <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
     <label>Subject
