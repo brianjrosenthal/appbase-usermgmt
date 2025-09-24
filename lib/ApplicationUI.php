@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../settings.php';
+require_once __DIR__ . '/Files.php';
 
 class ApplicationUI {
     
@@ -26,12 +27,20 @@ class ApplicationUI {
                 $navRight[] = '<a href="#" id="adminToggle">Admin</a>';
             }
             
-            // Profile photo placeholder with dropdown menu
+            // Profile photo with dropdown menu
             $initials = strtoupper(substr((string)($u['first_name'] ?? ''),0,1).substr((string)($u['last_name'] ?? ''),0,1));
-            $avatar = '<span class="nav-avatar nav-avatar-initials" aria-hidden="true">'.h($initials).'</span>';
+            $photoUrl = Files::profilePhotoUrl($u['photo_public_file_id'] ?? null);
+            
+            if ($photoUrl !== '') {
+                $avatar = '<img class="nav-avatar" src="'.h($photoUrl).'" alt="Profile" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">';
+            } else {
+                $avatar = '<span class="nav-avatar nav-avatar-initials" aria-hidden="true">'.h($initials).'</span>';
+            }
+            
             $navRight[] = '<div class="nav-avatar-wrap">'
                         . '<a href="#" id="avatarToggle" class="nav-avatar-link" aria-expanded="false" title="Account">'.$avatar.'</a>'
                         . '<div id="avatarMenu" class="avatar-menu hidden" role="menu" aria-hidden="true">'
+                        .   '<a href="/my_profile.php" role="menuitem">My Profile</a>'
                         .   '<a href="/logout.php" role="menuitem">Logout</a>'
                         . '</div>'
                         . '</div>';

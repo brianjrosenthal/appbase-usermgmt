@@ -39,6 +39,33 @@ INSERT INTO settings (key_name, value) VALUES
   ('timezone', 'America/New_York')
 ON DUPLICATE KEY UPDATE value=VALUES(value);
 
+-- ===== Files Storage (DB-backed uploads) =====
+
+-- Public files (profile photos)
+CREATE TABLE public_files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  data LONGBLOB NOT NULL,
+  content_type VARCHAR(100) DEFAULT NULL,
+  original_filename VARCHAR(255) DEFAULT NULL,
+  byte_length INT UNSIGNED DEFAULT NULL,
+  sha256 CHAR(64) DEFAULT NULL,
+  created_by_user_id INT DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pf_created_by FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_pf_sha256 ON public_files(sha256);
+CREATE INDEX idx_pf_created_by ON public_files(created_by_user_id);
+CREATE INDEX idx_pf_created_at ON public_files(created_at);
+
+-- Link columns (added via ALTER to avoid circular FK creation order)
+ALTER TABLE users
+  ADD COLUMN photo_public_file_id INT NULL;
+
+ALTER TABLE users
+  ADD CONSTRAINT fk_users_photo_public_file
+    FOREIGN KEY (photo_public_file_id) REFERENCES public_files(id) ON DELETE SET NULL;
+
 -- Optional: seed an admin user (update email and password hash, then remove)
 INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verified_at)
 VALUES ('Brian','Rosenthal','brian.rosenthal@gmail.com','$2y$10$9xH7Jq4v3o6s9k3y8i4rVOyWb0yBYZ5rW.0f9pZ.gG9K6l7lS6b2S',1,NOW());
