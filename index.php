@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/partials.php';
+Application::init();
 require_login();
 
 $me = current_user();

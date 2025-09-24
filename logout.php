@@ -1,5 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib/Application.php';
+
+// Initialize application
+Application::init();
 
 // Clear session
 session_destroy();

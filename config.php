@@ -2,11 +2,6 @@
 // Main configuration for RAG application
 require_once __DIR__ . '/config.local.php';
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 // Database connection
 function pdo(): PDO {
     static $pdo = null;

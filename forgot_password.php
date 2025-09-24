@@ -1,6 +1,15 @@
 <?php
-require_once __DIR__ . '/partials.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib/Application.php';
 require_once __DIR__ . '/lib/UserManagement.php';
+require_once __DIR__ . '/settings.php';
+
+// Initialize application
+Application::init();
+
+function h($s) { 
+    return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); 
+}
 
 // If already logged in, redirect to home
 if (current_user()) {

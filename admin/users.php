@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/UserManagement.php';
+Application::init();
 require_admin();
 
 $me = current_user();

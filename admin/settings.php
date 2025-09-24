@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../settings.php';
+Application::init();
 require_admin();
 
 $msg = null;
