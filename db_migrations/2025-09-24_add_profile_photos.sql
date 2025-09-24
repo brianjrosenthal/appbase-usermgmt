@@ -16,15 +16,15 @@ CREATE TABLE IF NOT EXISTS public_files (
 ) ENGINE=InnoDB;
 
 -- Add indexes for performance
-CREATE INDEX IF NOT EXISTS idx_pf_sha256 ON public_files(sha256);
-CREATE INDEX IF NOT EXISTS idx_pf_created_by ON public_files(created_by_user_id);
-CREATE INDEX IF NOT EXISTS idx_pf_created_at ON public_files(created_at);
+CREATE INDEX idx_pf_sha256 ON public_files(sha256);
+CREATE INDEX idx_pf_created_by ON public_files(created_by_user_id);
+CREATE INDEX idx_pf_created_at ON public_files(created_at);
 
 -- Add photo_public_file_id column to users table
 ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS photo_public_file_id INT NULL;
+ADD COLUMN photo_public_file_id INT NULL;
 
 -- Add foreign key constraint
 ALTER TABLE users 
-ADD CONSTRAINT IF NOT EXISTS fk_users_photo_public_file
+ADD CONSTRAINT fk_users_photo_public_file
   FOREIGN KEY (photo_public_file_id) REFERENCES public_files(id) ON DELETE SET NULL;
