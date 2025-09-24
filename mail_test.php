@@ -19,11 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $toName  = $u['first_name'].' '.$u['last_name'];
     // Send as simple HTML (preserve newlines)
     $html = nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'));
+    
+    // Clear any previous error logs for this test
+    error_clear_last();
+    
     $ok = send_email($toEmail, $subject, $html, $toName);
     if ($ok) {
-      $msg = "Sent test email to {$toEmail}.";
+      $msg = "Email appears to have been sent to {$toEmail}. Check your inbox (including spam folder).";
     } else {
-      $err = 'Failed to send email. Check SMTP settings in config.local.php.';
+      // Get more detailed error information
+      $lastError = error_get_last();
+      $errorDetails = '';
+      if ($lastError && strpos($lastError['message'], 'SMTP') !== false) {
+        $errorDetails = ' Error: ' . $lastError['message'];
+      }
+      $err = 'Failed to send email. Check SMTP settings in config.local.php.' . $errorDetails;
     }
   }
 }

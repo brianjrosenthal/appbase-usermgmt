@@ -12,6 +12,18 @@ function send_email(string $to, string $subject, string $htmlBody, string $toNam
     }
 
     try {
+        // Helper function to check SMTP response codes
+        $checkResponse = function($smtp, $expectedCodes, $command) {
+            $response = fgets($smtp, 512);
+            $code = (int)substr($response, 0, 3);
+            if (!in_array($code, $expectedCodes)) {
+                $error = "SMTP $command failed: $response";
+                error_log($error);
+                throw new Exception($error);
+            }
+            return $response;
+        };
+
         // Create a simple SMTP connection
         $smtp = fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 30);
         if (!$smtp) {
@@ -19,43 +31,43 @@ function send_email(string $to, string $subject, string $htmlBody, string $toNam
             return false;
         }
 
-        // Read initial response
-        fgets($smtp, 512);
+        // Read initial response (220)
+        $checkResponse($smtp, [220], 'connection');
 
         // EHLO
         fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [250], 'EHLO');
 
         // STARTTLS if using TLS
         if (defined('SMTP_SECURE') && SMTP_SECURE === 'tls') {
             fputs($smtp, "STARTTLS\r\n");
-            fgets($smtp, 512);
+            $checkResponse($smtp, [220], 'STARTTLS');
             stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
             
             // EHLO again after STARTTLS
             fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-            fgets($smtp, 512);
+            $checkResponse($smtp, [250], 'EHLO after STARTTLS');
         }
 
         // AUTH LOGIN
         fputs($smtp, "AUTH LOGIN\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [334], 'AUTH LOGIN');
         fputs($smtp, base64_encode(SMTP_USER) . "\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [334], 'AUTH username');
         fputs($smtp, base64_encode(SMTP_PASS) . "\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [235], 'AUTH password');
 
         // MAIL FROM
         fputs($smtp, "MAIL FROM: <" . SMTP_FROM_EMAIL . ">\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [250], 'MAIL FROM');
 
         // RCPT TO
         fputs($smtp, "RCPT TO: <$to>\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [250], 'RCPT TO');
 
         // DATA
         fputs($smtp, "DATA\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [354], 'DATA');
 
         // Headers and body
         $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'RAG Knowledge Base';
@@ -67,16 +79,19 @@ function send_email(string $to, string $subject, string $htmlBody, string $toNam
         $headers .= "\r\n";
 
         fputs($smtp, $headers . $htmlBody . "\r\n.\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [250], 'message data');
 
         // QUIT
         fputs($smtp, "QUIT\r\n");
-        fgets($smtp, 512);
+        $checkResponse($smtp, [221], 'QUIT');
 
         fclose($smtp);
         return true;
 
     } catch (Exception $e) {
+        if (isset($smtp) && is_resource($smtp)) {
+            fclose($smtp);
+        }
         error_log('Email sending failed: ' . $e->getMessage());
         return false;
     }
