@@ -23,17 +23,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Clear any previous error logs for this test
     error_clear_last();
     
-    $ok = send_email($toEmail, $subject, $html, $toName);
+    // Capture detailed SMTP errors
+    $smtpError = '';
+    $ok = send_email_with_error($toEmail, $subject, $html, $toName, $smtpError);
     if ($ok) {
       $msg = "Email appears to have been sent to {$toEmail}. Check your inbox (including spam folder).";
     } else {
-      // Get more detailed error information
-      $lastError = error_get_last();
-      $errorDetails = '';
-      if ($lastError && strpos($lastError['message'], 'SMTP') !== false) {
-        $errorDetails = ' Error: ' . $lastError['message'];
+      $err = 'Failed to send email. Check SMTP settings in config.local.php.';
+      if ($smtpError) {
+        $err .= '<br><strong>SMTP Error:</strong> ' . htmlspecialchars($smtpError, ENT_QUOTES, 'UTF-8');
       }
-      $err = 'Failed to send email. Check SMTP settings in config.local.php.' . $errorDetails;
     }
   }
 }
