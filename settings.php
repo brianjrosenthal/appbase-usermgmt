@@ -41,6 +41,6 @@ class Settings {
         }
         
         require_once __DIR__ . '/lib/Files.php';
-        return Files::publicFileUrl((int)$fileId);
+        return Files::publicFileImageUrl((int)$fileId, 200);
     }
 }

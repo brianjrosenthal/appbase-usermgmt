@@ -96,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <img width="200" src="<?=h($loginImageUrl)?>" alt="Login Logo" class="logo" style="margin-bottom: 16px;">
       </center>
     <?php endif; ?>
-    <h1>Login</h1>
-    <p class="subtitle"><?=h(Settings::siteTitle())?></p>
+    <h1 style="text-align: center;">Login</h1>
+    <p class="subtitle" style="text-align: center;"><?=h(Settings::siteTitle())?></p>
     <?php if (!empty($created) && !empty($verifyNotice)): ?><p class="flash">Account created. Check your email to verify your account before signing in.</p><?php elseif (!empty($created)): ?><p class="flash">Account created.</p><?php endif; ?>
     <?php if (!empty($verified)): ?><p class="flash">Email verified. You can now sign in.</p><?php endif; ?>
     <?php if (!empty($verifyError)): ?><p class="error">Invalid or expired verification link.</p><?php endif; ?>

@@ -73,11 +73,115 @@ final class Files {
   }
 
   // Profile photo URL (DB-backed only)
-  public static function profilePhotoUrl(?int $publicFileId): string {
+  public static function profilePhotoUrl(?int $publicFileId, ?int $width = null): string {
     if ($publicFileId && $publicFileId > 0) {
+      if ($width !== null) {
+        return self::publicFileImageUrl($publicFileId, $width);
+      }
       return self::publicFileUrl($publicFileId);
     }
     return '';
+  }
+
+  // Image URL with optional width resizing
+  public static function publicFileImageUrl(int $publicFileId, ?int $width = null): string {
+    if ($publicFileId <= 0) return '';
+
+    try {
+      // Fetch metadata to determine if it's an image
+      $st = pdo()->prepare("SELECT content_type, original_filename FROM public_files WHERE id = ? LIMIT 1");
+      $st->execute([$publicFileId]);
+      $meta = $st->fetch();
+      if (!$meta) return '';
+
+      $ctype = strtolower(trim((string)($meta['content_type'] ?? '')));
+      $orig  = (string)($meta['original_filename'] ?? '');
+      $ext = self::extForPublic($ctype, $orig);
+
+      // Only process images
+      $imageTypes = ['.jpg', '.png', '.webp', '.gif'];
+      if ($ext === null || !in_array($ext, $imageTypes)) {
+        return '';
+      }
+
+      // If no width specified, use regular publicFileUrl
+      if ($width === null || $width <= 0) {
+        return self::publicFileUrl($publicFileId);
+      }
+
+      $hash = md5((string)$publicFileId);
+      $dirKey = substr($hash, 0, 1);
+      $baseDir = self::cachePublicBaseDir();
+      $baseUrl = self::cachePublicBaseUrl();
+      $targetDir = $baseDir . '/' . $dirKey;
+      
+      // Resized filename with width suffix
+      $resizedFilename = $hash . '_w' . $width . $ext;
+      $resizedPath = $targetDir . '/' . $resizedFilename;
+      $resizedUrl = $baseUrl . '/' . $dirKey . '/' . $resizedFilename;
+
+      // If resized version already cached, return it
+      if (is_file($resizedPath)) {
+        return $resizedUrl;
+      }
+
+      // Ensure directory exists
+      if (!is_dir($targetDir)) {
+        @mkdir($targetDir, 0755, true);
+      }
+
+      // Get original cached file or create it
+      $originalFilename = $hash . $ext;
+      $originalPath = $targetDir . '/' . $originalFilename;
+      
+      if (!is_file($originalPath)) {
+        // Create original cached file first
+        $st2 = pdo()->prepare("SELECT data FROM public_files WHERE id = ? LIMIT 1");
+        $st2->execute([$publicFileId]);
+        $row = $st2->fetch();
+        if (!$row) {
+          return '/public_file_download.php?id=' . $publicFileId;
+        }
+
+        $data = (string)$row['data'];
+        $tmp = $originalPath . '.tmp' . bin2hex(random_bytes(4));
+        $ok = @file_put_contents($tmp, $data, LOCK_EX);
+        if ($ok === false) {
+          @unlink($tmp);
+          return '/public_file_download.php?id=' . $publicFileId;
+        }
+        @chmod($tmp, 0644);
+        if (!@rename($tmp, $originalPath)) {
+          @unlink($tmp);
+          return '/public_file_download.php?id=' . $publicFileId;
+        }
+      }
+
+      // Now resize the original
+      $resized = self::resizeImage($originalPath, $width, $ctype);
+      if ($resized === false) {
+        // If resize failed, return original
+        return self::publicFileUrl($publicFileId);
+      }
+
+      // Save resized image atomically
+      $tmp = $resizedPath . '.tmp' . bin2hex(random_bytes(4));
+      $ok = @file_put_contents($tmp, $resized, LOCK_EX);
+      if ($ok === false) {
+        @unlink($tmp);
+        return self::publicFileUrl($publicFileId);
+      }
+      @chmod($tmp, 0644);
+      if (!@rename($tmp, $resizedPath)) {
+        @unlink($tmp);
+        return self::publicFileUrl($publicFileId);
+      }
+
+      return $resizedUrl;
+    } catch (\Throwable $e) {
+      // On any error, fall back to original
+      return self::publicFileUrl($publicFileId);
+    }
   }
 
   // Helper: insert a public file row and return new id
@@ -143,5 +247,114 @@ final class Files {
     $st->execute([$id]);
     $row = $st->fetch();
     return $row ?: null;
+  }
+
+  // Resize image using GD
+  private static function resizeImage(string $originalPath, int $width, string $contentType): string|false {
+    if (!extension_loaded('gd')) {
+      return false;
+    }
+
+    try {
+      // Create image resource from file
+      $source = null;
+      switch ($contentType) {
+        case 'image/jpeg':
+          $source = @imagecreatefromjpeg($originalPath);
+          break;
+        case 'image/png':
+          $source = @imagecreatefrompng($originalPath);
+          break;
+        case 'image/webp':
+          if (function_exists('imagecreatefromwebp')) {
+            $source = @imagecreatefromwebp($originalPath);
+          }
+          break;
+        case 'image/gif':
+          $source = @imagecreatefromgif($originalPath);
+          break;
+      }
+
+      if ($source === false || $source === null) {
+        return false;
+      }
+
+      // Get original dimensions
+      $originalWidth = imagesx($source);
+      $originalHeight = imagesy($source);
+
+      // If original is smaller than requested width, return original
+      if ($originalWidth <= $width) {
+        imagedestroy($source);
+        return file_get_contents($originalPath) ?: false;
+      }
+
+      // Calculate new height maintaining aspect ratio
+      $newHeight = (int)round(($originalHeight * $width) / $originalWidth);
+
+      // Create new image
+      $resized = imagecreatetruecolor($width, $newHeight);
+      if ($resized === false) {
+        imagedestroy($source);
+        return false;
+      }
+
+      // Preserve transparency for PNG and GIF
+      if ($contentType === 'image/png' || $contentType === 'image/gif') {
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
+        $transparent = imagecolorallocatealpha($resized, 255, 255, 255, 127);
+        imagefill($resized, 0, 0, $transparent);
+      }
+
+      // Resize the image
+      $success = imagecopyresampled(
+        $resized, $source,
+        0, 0, 0, 0,
+        $width, $newHeight,
+        $originalWidth, $originalHeight
+      );
+
+      if (!$success) {
+        imagedestroy($source);
+        imagedestroy($resized);
+        return false;
+      }
+
+      // Output to string
+      ob_start();
+      $outputSuccess = false;
+      switch ($contentType) {
+        case 'image/jpeg':
+          $outputSuccess = imagejpeg($resized, null, 85); // 85% quality
+          break;
+        case 'image/png':
+          $outputSuccess = imagepng($resized, null, 6); // Compression level 6
+          break;
+        case 'image/webp':
+          if (function_exists('imagewebp')) {
+            $outputSuccess = imagewebp($resized, null, 85); // 85% quality
+          }
+          break;
+        case 'image/gif':
+          $outputSuccess = imagegif($resized);
+          break;
+      }
+
+      $imageData = ob_get_contents();
+      ob_end_clean();
+
+      // Clean up
+      imagedestroy($source);
+      imagedestroy($resized);
+
+      if (!$outputSuccess || $imageData === false) {
+        return false;
+      }
+
+      return $imageData;
+    } catch (\Throwable $e) {
+      return false;
+    }
   }
 }

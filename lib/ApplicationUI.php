@@ -65,7 +65,7 @@ class ApplicationUI {
             
             // Profile photo with dropdown menu
             $initials = strtoupper(substr((string)($u['first_name'] ?? ''),0,1).substr((string)($u['last_name'] ?? ''),0,1));
-            $photoUrl = Files::profilePhotoUrl($u['photo_public_file_id'] ?? null);
+            $photoUrl = Files::profilePhotoUrl($u['photo_public_file_id'] ?? null, 32);
             
             if ($photoUrl !== '') {
                 $avatar = '<img class="nav-avatar" src="'.h($photoUrl).'" alt="Profile" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">';
