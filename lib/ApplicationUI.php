@@ -77,6 +77,7 @@ class ApplicationUI {
                         . '<a href="#" id="avatarToggle" class="nav-avatar-link" aria-expanded="false" title="Account">'.$avatar.'</a>'
                         . '<div id="avatarMenu" class="avatar-menu hidden" role="menu" aria-hidden="true">'
                         .   '<a href="/my_profile.php" role="menuitem">My Profile</a>'
+                        .   '<a href="/change_password.php" role="menuitem">Change Password</a>'
                         .   '<a href="/logout.php" role="menuitem">Logout</a>'
                         . '</div>'
                         . '</div>';
