@@ -83,8 +83,9 @@ class UserManagement {
         $email = self::normEmail($data['email'] ?? '');
         $password = $data['password'] ?? '';
         $isAdmin = self::boolInt($data['is_admin'] ?? 0);
+        $requirePasswordSetup = !empty($data['require_password_setup']);
 
-        if ($first === '' || $last === '' || !$email || $password === '') {
+        if ($first === '' || $last === '' || !$email) {
             throw new InvalidArgumentException('Missing required fields for user creation.');
         }
 
@@ -93,16 +94,41 @@ class UserManagement {
             throw new InvalidArgumentException('Email already exists.');
         }
 
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-
-        $st = self::pdo()->prepare(
-            "INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verify_token,email_verified_at)
-             VALUES (?,?,?,?,?,NULL,NOW())"
-        );
-        $st->execute([$first, $last, $email, $hash, $isAdmin]);
-        $id = (int)self::pdo()->lastInsertId();
+        if ($requirePasswordSetup) {
+            // Create user with empty password hash and verification token for password setup
+            $hash = '';
+            $token = bin2hex(random_bytes(32));
+            $emailVerifiedAt = null;
+            
+            $st = self::pdo()->prepare(
+                "INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verify_token,email_verified_at)
+                 VALUES (?,?,?,?,?,?,?)"
+            );
+            $st->execute([$first, $last, $email, $hash, $isAdmin, $token, $emailVerifiedAt]);
+            $id = (int)self::pdo()->lastInsertId();
+            
+            // Send verification email that will lead to password setup
+            send_verification_email($email, $token, $first);
+            
+            self::log('user.create', $id, ['email' => $email, 'is_admin' => $isAdmin, 'requires_password_setup' => true]);
+        } else {
+            // Traditional user creation with password
+            if ($password === '') {
+                throw new InvalidArgumentException('Password is required when not using password setup flow.');
+            }
+            
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            
+            $st = self::pdo()->prepare(
+                "INSERT INTO users (first_name,last_name,email,password_hash,is_admin,email_verify_token,email_verified_at)
+                 VALUES (?,?,?,?,?,NULL,NOW())"
+            );
+            $st->execute([$first, $last, $email, $hash, $isAdmin]);
+            $id = (int)self::pdo()->lastInsertId();
+            
+            self::log('user.create', $id, ['email' => $email, 'is_admin' => $isAdmin]);
+        }
         
-        self::log('user.create', $id, ['email' => $email, 'is_admin' => $isAdmin]);
         return $id;
     }
 

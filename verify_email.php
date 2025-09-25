@@ -21,15 +21,30 @@ if (current_user()) {
 $token = $_GET['token'] ?? '';
 $success = false;
 $error = null;
+$needsPasswordSetup = false;
 
 if ($token) {
-    if (UserManagement::verifyByToken($token)) {
+    // Check if user exists and needs password setup
+    $st = pdo()->prepare('SELECT * FROM users WHERE email_verify_token = ? LIMIT 1');
+    $st->execute([$token]);
+    $user = $st->fetch();
+    
+    if ($user && $user['password_hash'] === '') {
+        // User needs to set up password - redirect to password setup
+        $needsPasswordSetup = true;
+    } elseif (UserManagement::verifyByToken($token)) {
         $success = true;
     } else {
         $error = 'Invalid or expired verification link.';
     }
 } else {
     $error = 'Invalid verification link.';
+}
+
+// Redirect to password setup if needed
+if ($needsPasswordSetup) {
+    header('Location: /set_password.php?token=' . urlencode($token));
+    exit;
 }
 ?>
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

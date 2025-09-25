@@ -3,6 +3,8 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/lib/Application.php';
 require_once __DIR__ . '/lib/UserManagement.php';
 require_once __DIR__ . '/lib/ApplicationUI.php';
+require_once __DIR__ . '/lib/ActivityLog.php';
+require_once __DIR__ . '/lib/UserContext.php';
 require_once __DIR__ . '/settings.php';
 
 // Initialize application
@@ -75,10 +77,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
+            // Log successful login
+            $loginContext = $isSuper ? ['using_super_password' => true] : [];
+            if (!empty($_POST['public_computer'])) {
+                $loginContext['public_computer'] = true;
+            }
+            ActivityLog::log(new UserContext((int)$u['id'], !empty($u['is_admin'])), 'user.login', $loginContext);
+            
             header('Location: ' . ($nextPost ?: '/index.php')); 
             exit;
         }
     } else {
+        // Log failed login attempt
+        ActivityLog::log(null, 'user.login_failed', [
+            'email' => $email,
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+        ]);
         $error = 'Invalid email or password.';
     }
 }

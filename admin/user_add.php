@@ -58,7 +58,7 @@ header_html('Add User');
     </div>
     
     <small class="small">
-      Note: The user will be created with a temporary password. They can use the "Forgot Password" feature to set their own password.
+      Note: The user will receive an email verification link. After verifying their email, they will be prompted to set their own password.
     </small>
   </form>
 </div>

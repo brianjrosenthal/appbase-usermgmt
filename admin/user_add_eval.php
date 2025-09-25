@@ -51,13 +51,13 @@ if (!empty($errors)) {
 }
 
 try {
-    // Create user without email verification required
+    // Create user with password setup flow
     $data = [
         'first_name' => $first_name,
         'last_name' => $last_name,
         'email' => $email,
-        'password' => bin2hex(random_bytes(16)), // Temporary password, user will set their own
-        'is_admin' => $is_admin
+        'is_admin' => $is_admin,
+        'require_password_setup' => true
     ];
     
     $ctx = UserContext::getLoggedInUserContext();
