@@ -55,16 +55,19 @@ if (isset($_GET['photo_err'])) { $err = 'Photo upload failed.'; }
 
 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
   <h2>Edit <?= h($userName) ?></h2>
-  <?php if ($canEditAdmin): ?>
-    <div class="nav-admin-wrap">
-      <button type="button" id="adminActionsToggle" class="button nav-admin-link" aria-expanded="false">Admin Actions</button>
-      <div id="adminActionsMenu" class="admin-menu hidden" role="menu" aria-hidden="true">
-        <a href="#" role="menuitem" onclick="if(confirm('Delete this user? This cannot be undone.')) { document.getElementById('deleteForm').submit(); } return false;">Delete User</a>
-        <a href="#" role="menuitem" onclick="document.getElementById('sendVerificationForm').submit(); return false;">Send Email Verification</a>
-        <a href="#" role="menuitem" onclick="document.getElementById('sendResetForm').submit(); return false;">Send Password Reset</a>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a class="button" href="/admin/users.php">Back to Users</a>
+    <?php if ($canEditAdmin): ?>
+      <div class="nav-admin-wrap">
+        <button type="button" id="adminActionsToggle" class="button nav-admin-link" aria-expanded="false">Admin Actions</button>
+        <div id="adminActionsMenu" class="admin-menu hidden" role="menu" aria-hidden="true">
+          <a href="#" role="menuitem" onclick="if(confirm('Delete this user? This cannot be undone.')) { document.getElementById('deleteForm').submit(); } return false;">Delete User</a>
+          <a href="#" role="menuitem" onclick="document.getElementById('sendVerificationForm').submit(); return false;">Send Email Verification</a>
+          <a href="#" role="menuitem" onclick="document.getElementById('sendResetForm').submit(); return false;">Send Password Reset</a>
+        </div>
       </div>
-    </div>
-  <?php endif; ?>
+    <?php endif; ?>
+  </div>
 </div>
 <?php if ($msg): ?><p class="flash"><?=h($msg)?></p><?php endif; ?>
 <?php if ($err): ?><p class="error"><?=h($err)?></p><?php endif; ?>
@@ -146,10 +149,6 @@ if (isset($_GET['photo_err'])) { $err = 'Photo upload failed.'; }
 
     <div class="actions">
       <button class="primary" type="submit">Update User</button>
-      <a class="button" href="/admin/users.php">Back to Users</a>
-      <?php if ($canEditAdmin): ?>
-        <button type="button" class="button" onclick="if(confirm('Delete this user? This cannot be undone.')) { document.getElementById('deleteForm').submit(); }">Delete User</button>
-      <?php endif; ?>
     </div>
   </form>
   

@@ -38,7 +38,8 @@ if ($action === 'delete') {
     }
     
     try {
-        $deleted = UserManagement::deleteUser($userId);
+        $ctx = UserContext::getLoggedInUserContext();
+        $deleted = UserManagement::deleteUser($ctx, $userId);
         if ($deleted) {
             header('Location: /admin/users.php?msg=' . urlencode('User deleted successfully.'));
             exit;
@@ -145,6 +146,8 @@ if (!empty($errors)) {
 }
 
 try {
+    $ctx = UserContext::getLoggedInUserContext();
+    
     // Update user profile
     $updateData = [
         'first_name' => $first_name,
@@ -152,11 +155,11 @@ try {
         'email' => $email
     ];
     
-    $updated = UserManagement::updateProfile($userId, $updateData);
+    $updated = UserManagement::updateProfile($ctx, $userId, $updateData);
     
     // Update admin flag if allowed
     if ($canEditAdmin) {
-        UserManagement::setAdminFlag($userId, (bool)$is_admin);
+        UserManagement::setAdminFlag($ctx, $userId, (bool)$is_admin);
     }
     
     if ($updated || $canEditAdmin) {

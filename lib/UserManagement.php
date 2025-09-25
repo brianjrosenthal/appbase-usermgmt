@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../settings.php';
 require_once __DIR__ . '/../mailer.php';
+require_once __DIR__ . '/UserContext.php';
+require_once __DIR__ . '/ActivityLog.php';
 
 class UserManagement {
     private static function pdo(): PDO {
@@ -22,6 +24,36 @@ class UserManagement {
 
     private static function boolInt($v): int {
         return !empty($v) ? 1 : 0;
+    }
+
+    // Activity logging - do not perform extra queries, just log what's provided.
+    private static function log(string $action, ?int $targetUserId, array $details = []): void {
+        try {
+            // Actor is the currently logged in user (if any). May be null for some flows.
+            $ctx = UserContext::getLoggedInUserContext();
+            $meta = $details;
+            if ($targetUserId !== null && !array_key_exists('target_user_id', $meta)) {
+                $meta['target_user_id'] = (int)$targetUserId;
+            }
+            ActivityLog::log($ctx, (string)$action, (array)$meta);
+        } catch (\Throwable $e) {
+            // Best-effort logging; never disrupt the main flow.
+        }
+    }
+
+    private static function assertAdmin(?UserContext $ctx): void {
+        if (!$ctx || !$ctx->admin) { 
+            throw new RuntimeException('Admins only'); 
+        }
+    }
+
+    private static function assertCanUpdate(?UserContext $ctx, int $targetUserId): void {
+        if (!$ctx) { 
+            throw new RuntimeException('Login required'); 
+        }
+        if (!$ctx->admin && $ctx->id !== $targetUserId) { 
+            throw new RuntimeException('Forbidden (assertCanUpdate)'); 
+        }
     }
 
     // Find user by email for authentication
@@ -43,7 +75,9 @@ class UserManagement {
     }
 
     // Create a new user (admin-created, auto-verified)
-    public static function createUser(array $data): int {
+    public static function createUser(UserContext $ctx, array $data): int {
+        self::assertAdmin($ctx);
+        
         $first = self::str($data['first_name'] ?? '');
         $last = self::str($data['last_name'] ?? '');
         $email = self::normEmail($data['email'] ?? '');
@@ -66,7 +100,10 @@ class UserManagement {
              VALUES (?,?,?,?,?,NULL,NOW())"
         );
         $st->execute([$first, $last, $email, $hash, $isAdmin]);
-        return (int)self::pdo()->lastInsertId();
+        $id = (int)self::pdo()->lastInsertId();
+        
+        self::log('user.create', $id, ['email' => $email, 'is_admin' => $isAdmin]);
+        return $id;
     }
 
     // Create user with email verification required
@@ -159,17 +196,13 @@ class UserManagement {
         $st = self::pdo()->prepare(
             'UPDATE users SET password_hash=?, password_reset_token_hash=NULL, password_reset_expires_at=NULL WHERE id=?'
         );
-        return $st->execute([$hash, (int)$user['id']]);
-    }
-
-    // Change password
-    public static function changePassword(int $id, string $newPassword): bool {
-        if ($newPassword === '') {
-            throw new InvalidArgumentException('New password is required.');
+        $ok = $st->execute([$hash, (int)$user['id']]);
+        
+        if ($ok) {
+            self::log('user.password_reset', (int)$user['id']);
         }
-        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-        $st = self::pdo()->prepare("UPDATE users SET password_hash=? WHERE id=?");
-        return $st->execute([$hash, $id]);
+        
+        return $ok;
     }
 
     // Check if email exists
@@ -200,7 +233,9 @@ class UserManagement {
     }
 
     // Update user profile
-    public static function updateProfile(int $id, array $fields): bool {
+    public static function updateProfile(UserContext $ctx, int $id, array $fields): bool {
+        self::assertCanUpdate($ctx, $id);
+        
         $allowed = ['first_name', 'last_name', 'email'];
         $set = [];
         $params = [];
@@ -227,18 +262,62 @@ class UserManagement {
 
         $sql = 'UPDATE users SET ' . implode(', ', $set) . ' WHERE id = ?';
         $st = self::pdo()->prepare($sql);
-        return $st->execute($params);
+        $ok = $st->execute($params);
+        
+        if ($ok) {
+            $updatedFields = array_intersect_key($fields, array_flip($allowed));
+            self::log('user.update', $id, $updatedFields);
+        }
+        
+        return $ok;
     }
 
     // Delete user
-    public static function deleteUser(int $id): bool {
+    public static function deleteUser(UserContext $ctx, int $id): bool {
+        self::assertAdmin($ctx);
+        if ($id === $ctx->id) { 
+            throw new RuntimeException('You cannot delete your own account.'); 
+        }
+        
         $st = self::pdo()->prepare('DELETE FROM users WHERE id = ?');
-        return $st->execute([$id]);
+        $ok = $st->execute([$id]);
+        
+        if ($ok) {
+            self::log('user.delete', $id);
+        }
+        
+        return $ok;
     }
 
     // Set admin flag
-    public static function setAdminFlag(int $id, bool $isAdmin): bool {
+    public static function setAdminFlag(UserContext $ctx, int $id, bool $isAdmin): bool {
+        self::assertAdmin($ctx);
+        
         $st = self::pdo()->prepare('UPDATE users SET is_admin = ? WHERE id = ?');
-        return $st->execute([$isAdmin ? 1 : 0, $id]);
+        $ok = $st->execute([$isAdmin ? 1 : 0, $id]);
+        
+        if ($ok) {
+            self::log('user.set_admin', $id, ['is_admin' => $isAdmin ? 1 : 0]);
+        }
+        
+        return $ok;
+    }
+
+    // Change password
+    public static function changePassword(UserContext $ctx, int $id, string $newPassword): bool {
+        self::assertCanUpdate($ctx, $id);
+        
+        if ($newPassword === '') {
+            throw new InvalidArgumentException('New password is required.');
+        }
+        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+        $st = self::pdo()->prepare("UPDATE users SET password_hash=? WHERE id=?");
+        $ok = $st->execute([$hash, $id]);
+        
+        if ($ok) {
+            self::log('user.change_password', $id);
+        }
+        
+        return $ok;
     }
 }

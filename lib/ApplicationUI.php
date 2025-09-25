@@ -29,6 +29,8 @@ class ApplicationUI {
                             . '<div id="adminMenu" class="admin-menu hidden" role="menu" aria-hidden="true">'
                             .   '<a href="/admin/users.php" role="menuitem">Users</a>'
                             .   '<a href="/admin/settings.php" role="menuitem">Settings</a>'
+                            .   '<a href="/admin/activity_log.php" role="menuitem">Activity Log</a>'
+                            .   '<a href="/admin/email_log.php" role="menuitem">Email Log</a>'
                             . '</div>'
                             . '</div>';
             }

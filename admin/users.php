@@ -80,9 +80,7 @@ header_html('Users');
             </td>
             <td><?= h(date('M j, Y', strtotime($user['created_at']))) ?></td>
             <td class="small">
-              <?php if ((int)$user['id'] !== (int)$me['id']): ?>
-                <a class="button small" href="/admin/user_edit.php?id=<?= (int)$user['id'] ?>">Edit</a>
-              <?php endif; ?>
+              <a class="button small" href="/admin/user_edit.php?id=<?= (int)$user['id'] ?>">Edit</a>
             </td>
           </tr>
         <?php endforeach; ?>

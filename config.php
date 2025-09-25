@@ -1,6 +1,15 @@
 <?php
 // Main configuration for RAG application
 require_once __DIR__ . '/config.local.php';
+require_once __DIR__ . '/lib/UserContext.php';
+
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Bootstrap UserContext from session
+UserContext::bootstrapFromSession();
 
 // Database connection
 function pdo(): PDO {

@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib/UserContext.php';
+require_once __DIR__ . '/lib/EmailLog.php';
 
 /**
  * Send an HTML email via SMTP (supports SSL 465 and STARTTLS 587).
@@ -284,11 +286,19 @@ function send_email_with_error(string $toEmail, string $subject, string $html, s
 }
 
 /**
- * Convenience wrapper. Returns true/false.
+ * Convenience wrapper with logging. Returns true/false.
  */
 function send_email(string $to, string $subject, string $html, string $toName = ''): bool {
   if ($toName === '') $toName = $to;
-  return send_smtp_mail($to, $toName, $subject, $html);
+  
+  $errorMessage = '';
+  $success = send_email_with_error($to, $subject, $html, $toName, $errorMessage);
+  
+  // Log the email attempt
+  $ctx = UserContext::getLoggedInUserContext();
+  EmailLog::log($ctx, $to, $toName, $subject, $html, $success, $success ? null : $errorMessage);
+  
+  return $success;
 }
 
 function send_verification_email(string $email, string $token, string $firstName = ''): bool {

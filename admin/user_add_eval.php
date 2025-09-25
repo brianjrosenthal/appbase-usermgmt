@@ -60,7 +60,8 @@ try {
         'is_admin' => $is_admin
     ];
     
-    $userId = UserManagement::createUser($data);
+    $ctx = UserContext::getLoggedInUserContext();
+    $userId = UserManagement::createUser($ctx, $data);
     
     // Success - redirect to edit page for the new user
     header('Location: /admin/user_edit.php?id=' . $userId . '&msg=' . urlencode('User created successfully.'));
