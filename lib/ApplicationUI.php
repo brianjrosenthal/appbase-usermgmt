@@ -7,6 +7,34 @@ require_once __DIR__ . '/Files.php';
 
 class ApplicationUI {
     
+    /**
+     * Generate a cache-busted URL for a static resource
+     */
+    public static function staticResourceUrl(string $path): string {
+        $filePath = __DIR__ . '/../' . ltrim($path, '/');
+        $version = @filemtime($filePath);
+        if (!$version) { 
+            $version = date('Ymd'); 
+        }
+        return $path . '?v=' . $version;
+    }
+    
+    /**
+     * Generate a complete CSS link tag with cache-busting
+     */
+    public static function cssLink(string $path): string {
+        $url = self::staticResourceUrl($path);
+        return '<link rel="stylesheet" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">';
+    }
+    
+    /**
+     * Generate a complete JS script tag with cache-busting
+     */
+    public static function jsScript(string $path): string {
+        $url = self::staticResourceUrl($path);
+        return '<script src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></script>';
+    }
+    
     public static function headerHtml(string $title): void {
         $u = current_user();
         $cur = basename($_SERVER['SCRIPT_NAME'] ?? '');
@@ -65,10 +93,7 @@ class ApplicationUI {
         echo '<title>'.h($title).' - '.h($siteTitle).'</title>';
 
         // cache-busted CSS
-        $cssPath = __DIR__.'/../styles.css';
-        $cssVer = @filemtime($cssPath);
-        if (!$cssVer) { $cssVer = date('Ymd'); }
-        echo '<link rel="stylesheet" href="/styles.css?v='.h($cssVer).'">';
+        echo self::cssLink('/styles.css');
         echo '</head><body>';
         echo '<header><h1><a href="/index.php">'.h($siteTitle).'</a></h1><nav>'.$navHtml.'</nav></header>';
 
@@ -106,9 +131,6 @@ class ApplicationUI {
 
     public static function footerHtml(): void {
         // cache-busted JS
-        $jsPath = __DIR__.'/../main.js';
-        $jsVer = @filemtime($jsPath);
-        if (!$jsVer) { $jsVer = date('Ymd'); }
-        echo '</main><script src="/main.js?v='.h($jsVer).'"></script></body></html>';
+        echo '</main>' . self::jsScript('/main.js') . '</body></html>';
     }
 }

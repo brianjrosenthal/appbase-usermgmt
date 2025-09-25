@@ -35,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Forgot Password - <?=h(Settings::siteTitle())?></title><link rel="stylesheet" href="/styles.css"></head>
+<title>Forgot Password - <?=h(Settings::siteTitle())?></title>
+<?=ApplicationUI::cssLink('/styles.css')?></head>
 <body class="auth">
   <div class="card">
     <h1>Forgot Password</h1>
