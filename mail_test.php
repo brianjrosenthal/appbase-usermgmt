@@ -54,7 +54,16 @@ header_html('Mail Test');
     <li>From: <?= defined('SMTP_FROM_EMAIL') && SMTP_FROM_EMAIL ? h(SMTP_FROM_EMAIL) : (defined('SMTP_USER') ? h(SMTP_USER) : '<em>undefined</em>') ?></li>
   </ul>
   
-  <?php if (defined('SMTP_SECURE') && SMTP_SECURE === 'tls'): ?>
+  <?php if (!defined('SMTP_HOST') || !defined('SMTP_PORT')): ?>
+    <div class="small" style="background: #f8d7da; padding: 8px; border-radius: 4px; margin-top: 8px; color: #721c24;">
+      <strong>Missing Configuration:</strong> You're missing SMTP_HOST and/or SMTP_PORT definitions. Add these to your config.local.php:
+      <ul style="margin: 4px 0;">
+        <li><strong>Gmail:</strong> SMTP_HOST = 'smtp.gmail.com', SMTP_PORT = 465</li>
+        <li><strong>Outlook:</strong> SMTP_HOST = 'smtp-mail.outlook.com', SMTP_PORT = 587</li>
+        <li><strong>Yahoo:</strong> SMTP_HOST = 'smtp.mail.yahoo.com', SMTP_PORT = 465</li>
+      </ul>
+    </div>
+  <?php elseif (defined('SMTP_SECURE') && SMTP_SECURE === 'tls'): ?>
     <div class="small" style="background: #fff3cd; padding: 8px; border-radius: 4px; margin-top: 8px;">
       <strong>STARTTLS Troubleshooting:</strong> If you're getting "STARTTLS failed" errors, try these common configurations:
       <ul style="margin: 4px 0;">

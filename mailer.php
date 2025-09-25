@@ -1,238 +1,324 @@
 <?php
-// Email functionality for RAG application
 require_once __DIR__ . '/config.php';
 
-function send_email_with_error(string $to, string $subject, string $htmlBody, string $toName = '', string &$errorMessage = ''): bool {
-    // Check if SMTP is configured
-    if (!defined('SMTP_HOST') || SMTP_HOST === '' || 
-        !defined('SMTP_USER') || SMTP_USER === '' || 
-        !defined('SMTP_PASS') || SMTP_PASS === '') {
-        $errorMessage = 'SMTP not configured - missing SMTP_HOST, SMTP_USER, or SMTP_PASS';
-        error_log('SMTP not configured - email not sent to: ' . $to);
-        return false;
-    }
+/**
+ * Send an HTML email via SMTP (supports SSL 465 and STARTTLS 587).
+ * Returns true on success, false on failure.
+ */
+function send_smtp_mail(string $toEmail, string $toName, string $subject, string $html): bool {
+  // Basic guardrails
+  if (!defined('SMTP_HOST') || !defined('SMTP_PORT') || !defined('SMTP_USER') || !defined('SMTP_PASS')) {
+    return false;
+  }
 
-    try {
-        // Helper function to check SMTP response codes and capture raw responses
-        $checkResponse = function($smtp, $expectedCodes, $command) use (&$errorMessage) {
-            $response = fgets($smtp, 512);
-            $code = (int)substr($response, 0, 3);
-            if (!in_array($code, $expectedCodes)) {
-                $errorMessage = "SMTP $command failed: " . trim($response);
-                error_log($errorMessage);
-                throw new Exception($errorMessage);
-            }
-            return $response;
-        };
+  $host = SMTP_HOST;
+  $port = (int)SMTP_PORT;
+  $secure = defined('SMTP_SECURE') ? strtolower(SMTP_SECURE) : 'tls';
+  $fromEmail = defined('SMTP_FROM_EMAIL') && SMTP_FROM_EMAIL ? SMTP_FROM_EMAIL : SMTP_USER;
+  $fromName  = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'CustomGPT Knowledge Base';
 
-        // Create SMTP connection (SSL or plain)
-        $context = stream_context_create();
-        if (defined('SMTP_SECURE') && SMTP_SECURE === 'ssl') {
-            // SSL connection from the start
-            $smtp = stream_socket_client('ssl://' . SMTP_HOST . ':' . SMTP_PORT, $errno, $errstr, 30, STREAM_CLIENT_CONNECT, $context);
-        } else {
-            // Plain connection (may upgrade to TLS later)
-            $smtp = fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 30);
-        }
-        
-        if (!$smtp) {
-            $errorMessage = "SMTP connection failed: $errstr ($errno)";
-            error_log($errorMessage);
-            return false;
-        }
+  $timeout = 20;
+  $transport = ($secure === 'ssl') ? "ssl://$host" : $host;
+  $fp = @stream_socket_client("$transport:$port", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+  if (!$fp) return false;
 
-        // Read initial response (220)
-        $checkResponse($smtp, [220], 'connection');
+  stream_set_timeout($fp, $timeout);
 
-        // EHLO
-        fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-        $checkResponse($smtp, [250], 'EHLO');
+  $expect = function(array $codes) use ($fp): bool {
+    $line = '';
+    do {
+      $line = fgets($fp, 515);
+      if ($line === false) return false;
+      $code = (int)substr($line, 0, 3);
+      $more = isset($line[3]) && $line[3] === '-';
+    } while ($more);
+    return in_array($code, $codes, true);
+  };
 
-        // STARTTLS if using TLS
-        if (defined('SMTP_SECURE') && SMTP_SECURE === 'tls') {
-            fputs($smtp, "STARTTLS\r\n");
-            $checkResponse($smtp, [220], 'STARTTLS');
-            stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            
-            // EHLO again after STARTTLS
-            fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-            $checkResponse($smtp, [250], 'EHLO after STARTTLS');
-        }
+  $send = function(string $cmd) use ($fp): bool {
+    return fwrite($fp, $cmd . "\r\n") !== false;
+  };
 
-        // AUTH LOGIN
-        fputs($smtp, "AUTH LOGIN\r\n");
-        $checkResponse($smtp, [334], 'AUTH LOGIN');
-        fputs($smtp, base64_encode(SMTP_USER) . "\r\n");
-        $checkResponse($smtp, [334], 'AUTH username');
-        fputs($smtp, base64_encode(SMTP_PASS) . "\r\n");
-        $checkResponse($smtp, [235], 'AUTH password');
+  if (!$expect([220])) { fclose($fp); return false; }
 
-        // MAIL FROM
-        fputs($smtp, "MAIL FROM: <" . SMTP_FROM_EMAIL . ">\r\n");
-        $checkResponse($smtp, [250], 'MAIL FROM');
+  $ehloName = $_SERVER['SERVER_NAME'] ?? 'localhost';
+  if (!$send("EHLO " . $ehloName)) { fclose($fp); return false; }
+  if (!$expect([250])) { fclose($fp); return false; }
 
-        // RCPT TO
-        fputs($smtp, "RCPT TO: <$to>\r\n");
-        $checkResponse($smtp, [250], 'RCPT TO');
+  if ($secure === 'tls') {
+    if (!$send("STARTTLS")) { fclose($fp); return false; }
+    if (!$expect([220])) { fclose($fp); return false; }
+    if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { fclose($fp); return false; }
+    if (!$send("EHLO " . $ehloName)) { fclose($fp); return false; }
+    if (!$expect([250])) { fclose($fp); return false; }
+  }
 
-        // DATA
-        fputs($smtp, "DATA\r\n");
-        $checkResponse($smtp, [354], 'DATA');
+  // AUTH LOGIN
+  if (!$send("AUTH LOGIN")) { fclose($fp); return false; }
+  if (!$expect([334])) { fclose($fp); return false; }
+  if (!$send(base64_encode(SMTP_USER))) { fclose($fp); return false; }
+  if (!$expect([334])) { fclose($fp); return false; }
+  if (!$send(base64_encode(SMTP_PASS))) { fclose($fp); return false; }
+  if (!$expect([235])) { fclose($fp); return false; }
 
-        // Headers and body
-        $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'RAG Knowledge Base';
-        $headers = "From: $fromName <" . SMTP_FROM_EMAIL . ">\r\n";
-        $headers .= "To: " . ($toName ? "$toName <$to>" : $to) . "\r\n";
-        $headers .= "Subject: $subject\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-        $headers .= "\r\n";
+  // Envelope
+  if (!$send("MAIL FROM:<$fromEmail>")) { fclose($fp); return false; }
+  if (!$expect([250])) { fclose($fp); return false; }
+  if (!$send("RCPT TO:<$toEmail>")) { fclose($fp); return false; }
+  if (!$expect([250,251])) { fclose($fp); return false; }
+  if (!$send("DATA")) { fclose($fp); return false; }
+  if (!$expect([354])) { fclose($fp); return false; }
 
-        fputs($smtp, $headers . $htmlBody . "\r\n.\r\n");
-        $checkResponse($smtp, [250], 'message data');
+  // Headers
+  $date = date('r');
+  $headers = [];
+  $headers[] = "Date: $date";
+  $headers[] = "From: ".mb_encode_mimeheader($fromName)." <{$fromEmail}>";
+  $headers[] = "To: ".mb_encode_mimeheader($toName)." <{$toEmail}>";
+  $headers[] = "Subject: ".mb_encode_mimeheader($subject);
+  $headers[] = "MIME-Version: 1.0";
+  $headers[] = "Content-Type: text/html; charset=UTF-8";
+  $headers[] = "Content-Transfer-Encoding: 8bit";
 
-        // QUIT
-        fputs($smtp, "QUIT\r\n");
-        $checkResponse($smtp, [221], 'QUIT');
+  // Normalize newlines and dot-stuffing
+  $body = preg_replace("/\r\n|\r|\n/", "\r\n", $html);
+  $body = preg_replace("/^\./m", "..", $body);
 
-        fclose($smtp);
-        return true;
+  $data = implode("\r\n", $headers) . "\r\n\r\n" . $body . "\r\n.";
+  if (!$send($data)) { fclose($fp); return false; }
+  if (!$expect([250])) { fclose($fp); return false; }
 
-    } catch (Exception $e) {
-        if (isset($smtp) && is_resource($smtp)) {
-            fclose($smtp);
-        }
-        if (!$errorMessage) {
-            $errorMessage = $e->getMessage();
-        }
-        error_log('Email sending failed: ' . $e->getMessage());
-        return false;
-    }
+  $send("QUIT");
+  fclose($fp);
+  return true;
 }
 
-function send_email(string $to, string $subject, string $htmlBody, string $toName = ''): bool {
-    // Check if SMTP is configured
-    if (!defined('SMTP_HOST') || SMTP_HOST === '' || 
-        !defined('SMTP_USER') || SMTP_USER === '' || 
-        !defined('SMTP_PASS') || SMTP_PASS === '') {
-        error_log('SMTP not configured - email not sent to: ' . $to);
+/**
+ * Enhanced version that returns detailed error information.
+ * Returns array with 'success' (bool) and 'error' (string|null) keys.
+ */
+function send_email_with_error(string $toEmail, string $subject, string $html, string $toName = '', string &$errorMessage = ''): bool {
+  if ($toName === '') $toName = $toEmail;
+
+  if (!defined('SMTP_HOST') || !defined('SMTP_PORT') || !defined('SMTP_USER') || !defined('SMTP_PASS')) {
+    $errorMessage = 'SMTP configuration missing (SMTP_HOST, SMTP_PORT, SMTP_USER, or SMTP_PASS not defined)';
+    return false;
+  }
+
+  $host = SMTP_HOST;
+  $port = (int)SMTP_PORT;
+  $secure = defined('SMTP_SECURE') ? strtolower(SMTP_SECURE) : 'tls';
+  $fromEmail = defined('SMTP_FROM_EMAIL') && SMTP_FROM_EMAIL ? SMTP_FROM_EMAIL : SMTP_USER;
+  $fromName  = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'CustomGPT Knowledge Base';
+
+  $timeout = 20;
+  $transport = ($secure === 'ssl') ? "ssl://$host" : $host;
+  $fp = @stream_socket_client("$transport:$port", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+  if (!$fp) {
+    $errorMessage = "Failed to connect to SMTP server $host:$port - $errstr (errno: $errno)";
+    return false;
+  }
+
+  stream_set_timeout($fp, $timeout);
+
+  $lastResponse = '';
+  $expect = function(array $codes) use ($fp, &$lastResponse): bool {
+    $line = '';
+    do {
+      $line = fgets($fp, 515);
+      if ($line === false) {
+        $lastResponse = 'Connection lost or timeout';
         return false;
+      }
+      $lastResponse = trim($line);
+      $code = (int)substr($line, 0, 3);
+      $more = isset($line[3]) && $line[3] === '-';
+    } while ($more);
+    return in_array($code, $codes, true);
+  };
+
+  $send = function(string $cmd) use ($fp): bool {
+    return fwrite($fp, $cmd . "\r\n") !== false;
+  };
+
+  if (!$expect([220])) { 
+    fclose($fp); 
+    $errorMessage = "SMTP greeting failed: $lastResponse";
+    return false;
+  }
+
+  $ehloName = $_SERVER['SERVER_NAME'] ?? 'localhost';
+  if (!$send("EHLO " . $ehloName)) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send EHLO command";
+    return false;
+  }
+  if (!$expect([250])) { 
+    fclose($fp); 
+    $errorMessage = "EHLO failed: $lastResponse";
+    return false;
+  }
+
+  if ($secure === 'tls') {
+    if (!$send("STARTTLS")) { 
+      fclose($fp); 
+      $errorMessage = "Failed to send STARTTLS command";
+      return false;
     }
-
-    try {
-        // Helper function to check SMTP response codes
-        $checkResponse = function($smtp, $expectedCodes, $command) {
-            $response = fgets($smtp, 512);
-            $code = (int)substr($response, 0, 3);
-            if (!in_array($code, $expectedCodes)) {
-                $error = "SMTP $command failed: $response";
-                error_log($error);
-                throw new Exception($error);
-            }
-            return $response;
-        };
-
-        // Create a simple SMTP connection
-        $smtp = fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 30);
-        if (!$smtp) {
-            error_log("SMTP connection failed: $errstr ($errno)");
-            return false;
-        }
-
-        // Read initial response (220)
-        $checkResponse($smtp, [220], 'connection');
-
-        // EHLO
-        fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-        $checkResponse($smtp, [250], 'EHLO');
-
-        // STARTTLS if using TLS
-        if (defined('SMTP_SECURE') && SMTP_SECURE === 'tls') {
-            fputs($smtp, "STARTTLS\r\n");
-            $checkResponse($smtp, [220], 'STARTTLS');
-            stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            
-            // EHLO again after STARTTLS
-            fputs($smtp, "EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "\r\n");
-            $checkResponse($smtp, [250], 'EHLO after STARTTLS');
-        }
-
-        // AUTH LOGIN
-        fputs($smtp, "AUTH LOGIN\r\n");
-        $checkResponse($smtp, [334], 'AUTH LOGIN');
-        fputs($smtp, base64_encode(SMTP_USER) . "\r\n");
-        $checkResponse($smtp, [334], 'AUTH username');
-        fputs($smtp, base64_encode(SMTP_PASS) . "\r\n");
-        $checkResponse($smtp, [235], 'AUTH password');
-
-        // MAIL FROM
-        fputs($smtp, "MAIL FROM: <" . SMTP_FROM_EMAIL . ">\r\n");
-        $checkResponse($smtp, [250], 'MAIL FROM');
-
-        // RCPT TO
-        fputs($smtp, "RCPT TO: <$to>\r\n");
-        $checkResponse($smtp, [250], 'RCPT TO');
-
-        // DATA
-        fputs($smtp, "DATA\r\n");
-        $checkResponse($smtp, [354], 'DATA');
-
-        // Headers and body
-        $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'RAG Knowledge Base';
-        $headers = "From: $fromName <" . SMTP_FROM_EMAIL . ">\r\n";
-        $headers .= "To: " . ($toName ? "$toName <$to>" : $to) . "\r\n";
-        $headers .= "Subject: $subject\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-        $headers .= "\r\n";
-
-        fputs($smtp, $headers . $htmlBody . "\r\n.\r\n");
-        $checkResponse($smtp, [250], 'message data');
-
-        // QUIT
-        fputs($smtp, "QUIT\r\n");
-        $checkResponse($smtp, [221], 'QUIT');
-
-        fclose($smtp);
-        return true;
-
-    } catch (Exception $e) {
-        if (isset($smtp) && is_resource($smtp)) {
-            fclose($smtp);
-        }
-        error_log('Email sending failed: ' . $e->getMessage());
-        return false;
+    if (!$expect([220])) { 
+      fclose($fp); 
+      $errorMessage = "STARTTLS failed: $lastResponse";
+      return false;
     }
+    if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { 
+      fclose($fp); 
+      $errorMessage = "Failed to enable TLS encryption";
+      return false;
+    }
+    if (!$send("EHLO " . $ehloName)) { 
+      fclose($fp); 
+      $errorMessage = "Failed to send EHLO after STARTTLS";
+      return false;
+    }
+    if (!$expect([250])) { 
+      fclose($fp); 
+      $errorMessage = "EHLO after STARTTLS failed: $lastResponse";
+      return false;
+    }
+  }
+
+  // AUTH LOGIN
+  if (!$send("AUTH LOGIN")) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send AUTH LOGIN command";
+    return false;
+  }
+  if (!$expect([334])) { 
+    fclose($fp); 
+    $errorMessage = "AUTH LOGIN failed: $lastResponse";
+    return false;
+  }
+  if (!$send(base64_encode(SMTP_USER))) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send username";
+    return false;
+  }
+  if (!$expect([334])) { 
+    fclose($fp); 
+    $errorMessage = "Username authentication failed: $lastResponse";
+    return false;
+  }
+  if (!$send(base64_encode(SMTP_PASS))) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send password";
+    return false;
+  }
+  if (!$expect([235])) { 
+    fclose($fp); 
+    $errorMessage = "Password authentication failed: $lastResponse";
+    return false;
+  }
+
+  // Envelope
+  if (!$send("MAIL FROM:<$fromEmail>")) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send MAIL FROM command";
+    return false;
+  }
+  if (!$expect([250])) { 
+    fclose($fp); 
+    $errorMessage = "MAIL FROM failed: $lastResponse";
+    return false;
+  }
+  if (!$send("RCPT TO:<$toEmail>")) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send RCPT TO command";
+    return false;
+  }
+  if (!$expect([250,251])) { 
+    fclose($fp); 
+    $errorMessage = "RCPT TO failed: $lastResponse";
+    return false;
+  }
+  if (!$send("DATA")) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send DATA command";
+    return false;
+  }
+  if (!$expect([354])) { 
+    fclose($fp); 
+    $errorMessage = "DATA command failed: $lastResponse";
+    return false;
+  }
+
+  // Headers
+  $date = date('r');
+  $headers = [];
+  $headers[] = "Date: $date";
+  $headers[] = "From: ".mb_encode_mimeheader($fromName)." <{$fromEmail}>";
+  $headers[] = "To: ".mb_encode_mimeheader($toName)." <{$toEmail}>";
+  $headers[] = "Subject: ".mb_encode_mimeheader($subject);
+  $headers[] = "MIME-Version: 1.0";
+  $headers[] = "Content-Type: text/html; charset=UTF-8";
+  $headers[] = "Content-Transfer-Encoding: 8bit";
+
+  // Normalize newlines and dot-stuffing
+  $body = preg_replace("/\r\n|\r|\n/", "\r\n", $html);
+  $body = preg_replace("/^\./m", "..", $body);
+
+  $data = implode("\r\n", $headers) . "\r\n\r\n" . $body . "\r\n.";
+  if (!$send($data)) { 
+    fclose($fp); 
+    $errorMessage = "Failed to send email data";
+    return false;
+  }
+  if (!$expect([250])) { 
+    fclose($fp); 
+    $errorMessage = "Email data transmission failed: $lastResponse";
+    return false;
+  }
+
+  $send("QUIT");
+  fclose($fp);
+  return true;
+}
+
+/**
+ * Convenience wrapper. Returns true/false.
+ */
+function send_email(string $to, string $subject, string $html, string $toName = ''): bool {
+  if ($toName === '') $toName = $to;
+  return send_smtp_mail($to, $toName, $subject, $html);
 }
 
 function send_verification_email(string $email, string $token, string $firstName = ''): bool {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $verifyUrl = $scheme . '://' . $host . '/verify_email.php?token=' . urlencode($token);
-    
-    $siteTitle = Settings::siteTitle();
-    $name = $firstName ? htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8') : htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
-    
-    $html = '<p>Hello ' . $name . ',</p>'
-          . '<p>Please verify your email to activate your account for ' . htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') . '.</p>'
-          . '<p><a href="' . htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
-          . '<p>After verifying, you will be prompted to set your password.</p>';
-    
-    return send_email($email, 'Verify your ' . $siteTitle . ' account', $html, $name);
+  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+  $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+  $verifyUrl = $scheme . '://' . $host . '/verify_email.php?token=' . urlencode($token);
+  
+  $siteTitle = Settings::siteTitle();
+  $name = $firstName ? htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8') : htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+  
+  $html = '<p>Hello ' . $name . ',</p>'
+        . '<p>Please verify your email to activate your account for ' . htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') . '.</p>'
+        . '<p><a href="' . htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
+        . '<p>After verifying, you will be prompted to set your password.</p>';
+  
+  return send_email($email, 'Verify your ' . $siteTitle . ' account', $html, $name);
 }
 
 function send_password_reset_email(string $email, string $token, string $firstName = ''): bool {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $resetUrl = $scheme . '://' . $host . '/reset_password.php?token=' . urlencode($token);
-    
-    $siteTitle = Settings::siteTitle();
-    $name = $firstName ? htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8') : htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
-    
-    $html = '<p>Hello ' . $name . ',</p>'
-          . '<p>You requested a password reset for your ' . htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') . ' account.</p>'
-          . '<p><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
-          . '<p>This link will expire in 30 minutes. If you did not request this reset, you can safely ignore this email.</p>';
-    
-    return send_email($email, 'Reset your ' . $siteTitle . ' password', $html, $name);
+  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+  $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+  $resetUrl = $scheme . '://' . $host . '/reset_password.php?token=' . urlencode($token);
+  
+  $siteTitle = Settings::siteTitle();
+  $name = $firstName ? htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8') : htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+  
+  $html = '<p>Hello ' . $name . ',</p>'
+        . '<p>You requested a password reset for your ' . htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') . ' account.</p>'
+        . '<p><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
+        . '<p>This link will expire in 30 minutes. If you did not request this reset, you can safely ignore this email.</p>';
+  
+  return send_email($email, 'Reset your ' . $siteTitle . ' password', $html, $name);
 }
