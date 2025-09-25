@@ -61,9 +61,8 @@ if ($action === 'send_verification') {
     
     try {
         // Generate new verification token
-        $token = bin2hex(random_bytes(32));
-        $stmt = pdo()->prepare('UPDATE users SET email_verify_token = ?, email_verified_at = NULL WHERE id = ?');
-        $stmt->execute([$token, $userId]);
+        $ctx = UserContext::getLoggedInUserContext();
+        $token = UserManagement::setEmailVerificationToken($ctx, $userId);
         
         // Send verification email
         require_once __DIR__ . '/../mailer.php';

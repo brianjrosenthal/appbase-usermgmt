@@ -320,4 +320,57 @@ class UserManagement {
         
         return $ok;
     }
+
+    // Update user profile (for my_profile.php)
+    public static function updateUserProfile(UserContext $ctx, int $id, string $firstName, string $lastName, string $email): bool {
+        self::assertCanUpdate($ctx, $id);
+        
+        if ($firstName === '' || $lastName === '' || $email === '') {
+            throw new InvalidArgumentException('First name, last name, and email are required.');
+        }
+        
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Valid email is required.');
+        }
+        
+        $st = self::pdo()->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?");
+        $ok = $st->execute([$firstName, $lastName, $email, $id]);
+        
+        if ($ok) {
+            self::log('user.profile_update', $id, ['email' => $email]);
+        }
+        
+        return $ok;
+    }
+
+    // Set email verification token (for admin use)
+    public static function setEmailVerificationToken(UserContext $ctx, int $id): string {
+        self::assertAdmin($ctx);
+        
+        $token = bin2hex(random_bytes(32));
+        $st = self::pdo()->prepare('UPDATE users SET email_verify_token = ?, email_verified_at = NULL WHERE id = ?');
+        $ok = $st->execute([$token, $id]);
+        
+        if (!$ok) {
+            throw new RuntimeException('Failed to set email verification token.');
+        }
+        
+        self::log('user.email_verification_token_set', $id);
+        return $token;
+    }
+
+    // Update user photo
+    public static function updateUserPhoto(UserContext $ctx, int $id, ?int $photoPublicFileId): bool {
+        self::assertCanUpdate($ctx, $id);
+        
+        $st = self::pdo()->prepare("UPDATE users SET photo_public_file_id = ? WHERE id = ?");
+        $ok = $st->execute([$photoPublicFileId, $id]);
+        
+        if ($ok) {
+            $action = $photoPublicFileId ? 'user.photo_update' : 'user.photo_remove';
+            self::log($action, $id, ['photo_public_file_id' => $photoPublicFileId]);
+        }
+        
+        return $ok;
+    }
 }

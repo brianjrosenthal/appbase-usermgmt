@@ -2,6 +2,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/lib/Application.php';
 require_once __DIR__ . '/lib/UserManagement.php';
+require_once __DIR__ . '/lib/ApplicationUI.php';
 require_once __DIR__ . '/settings.php';
 
 // Initialize application
@@ -36,6 +37,14 @@ if ($token) {
 <?=ApplicationUI::cssLink('/styles.css')?></head>
 <body class="auth">
   <div class="card">
+    <?php 
+      $loginImageUrl = Settings::loginImageUrl();
+      if ($loginImageUrl !== ''): 
+    ?>
+      <center>
+        <img width="200" src="<?=h($loginImageUrl)?>" alt="Login Logo" class="logo" style="margin-bottom: 16px;">
+      </center>
+    <?php endif; ?>
     <h1>Email Verification</h1>
     <p class="subtitle"><?=h(Settings::siteTitle())?></p>
     

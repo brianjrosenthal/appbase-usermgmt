@@ -48,8 +48,8 @@ if ($currentId !== $userId && empty($u['is_admin'])) {
 if ($action === 'delete') {
   // Delete existing photo reference
   try {
-    $st = pdo()->prepare("UPDATE users SET photo_public_file_id = NULL WHERE id=?");
-    $st->execute([$userId]);
+    $ctx = UserContext::getLoggedInUserContext();
+    UserManagement::updateUserPhoto($ctx, $userId, null);
   } catch (Throwable $e) {
     redirect_back($returnTo, ['err' => 'db_failed']);
   }
@@ -102,8 +102,8 @@ if ($data === false) {
 
 try {
   $publicId = Files::insertPublicFile($data, $mime, $origName, $currentId);
-  $st = pdo()->prepare("UPDATE users SET photo_public_file_id = ? WHERE id = ?");
-  $st->execute([$publicId, $userId]);
+  $ctx = UserContext::getLoggedInUserContext();
+  UserManagement::updateUserPhoto($ctx, $userId, $publicId);
 } catch (Throwable $e) {
   redirect_back($returnTo, ['err' => 'db_failed']);
 }

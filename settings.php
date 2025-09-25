@@ -33,4 +33,14 @@ class Settings {
     public static function timezone(): string {
         return self::get('timezone', date_default_timezone_get());
     }
+
+    public static function loginImageUrl(): string {
+        $fileId = self::get('login_image_file_id', '');
+        if ($fileId === '' || !is_numeric($fileId)) {
+            return '';
+        }
+        
+        require_once __DIR__ . '/lib/Files.php';
+        return Files::publicFileUrl((int)$fileId);
+    }
 }

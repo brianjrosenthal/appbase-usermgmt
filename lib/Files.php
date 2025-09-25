@@ -134,4 +134,14 @@ final class Files {
     ];
     return $mapExt[$ext] ?? null;
   }
+
+  // Get public file data for download (for public_file_download.php)
+  public static function getPublicFileForDownload(int $id): ?array {
+    if ($id <= 0) return null;
+    
+    $st = pdo()->prepare("SELECT data, content_type, original_filename, byte_length, sha256 FROM public_files WHERE id = ? LIMIT 1");
+    $st->execute([$id]);
+    $row = $st->fetch();
+    return $row ?: null;
+  }
 }

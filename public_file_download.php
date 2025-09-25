@@ -11,9 +11,8 @@ Application::init();
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) { http_response_code(400); exit('Missing id'); }
 
-$st = pdo()->prepare("SELECT data, content_type, original_filename, byte_length, sha256 FROM public_files WHERE id = ? LIMIT 1");
-$st->execute([$id]);
-$row = $st->fetch();
+require_once __DIR__ . '/lib/Files.php';
+$row = Files::getPublicFileForDownload($id);
 if (!$row) { http_response_code(404); exit('Not found'); }
 
 $data = (string)$row['data'];

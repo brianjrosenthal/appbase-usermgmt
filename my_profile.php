@@ -35,19 +35,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($errors)) {
             try {
-                $st = pdo()->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?");
-                $ok = $st->execute([$first, $last, $email, (int)$me['id']]);
+                $ctx = UserContext::getLoggedInUserContext();
+                $ok = UserManagement::updateUserProfile($ctx, (int)$me['id'], $first, $last, $email);
                 if ($ok) {
                     $msg = 'Profile updated.';
                     // Refresh $me
-                    $st = pdo()->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
-                    $st->execute([(int)$me['id']]);
-                    $me = $st->fetch() ?: $me;
+                    $me = UserManagement::findById((int)$me['id']) ?: $me;
                 } else {
                     $err = 'Failed to update profile.';
                 }
             } catch (Throwable $e) {
-                $err = 'Error updating profile.';
+                $err = 'Error updating profile: ' . $e->getMessage();
             }
         } else {
             $err = implode(' ', $errors);
