@@ -51,7 +51,7 @@ if (!empty($errors)) {
 }
 
 try {
-    // Create user with email verification required
+    // Create user without email verification required
     $data = [
         'first_name' => $first_name,
         'last_name' => $last_name,
@@ -60,10 +60,10 @@ try {
         'is_admin' => $is_admin
     ];
     
-    $userId = UserManagement::createUserWithVerification($data);
+    $userId = UserManagement::createUser($data);
     
     // Success - redirect to edit page for the new user
-    header('Location: /admin/user_edit.php?id=' . $userId . '&msg=' . urlencode('User created successfully. Verification email sent.'));
+    header('Location: /admin/user_edit.php?id=' . $userId . '&msg=' . urlencode('User created successfully.'));
     exit;
     
 } catch (Exception $e) {

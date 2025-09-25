@@ -28,8 +28,9 @@ if (!$user) {
 $me = current_user();
 $canEditAdmin = ((int)$user['id'] !== (int)$me['id']); // Can't change own admin status
 
-// Handle delete action
+// Handle admin actions
 $action = $_POST['action'] ?? 'update';
+
 if ($action === 'delete') {
     if (!$canEditAdmin) {
         header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Cannot delete your own account.'));
@@ -47,6 +48,58 @@ if ($action === 'delete') {
         }
     } catch (Exception $e) {
         header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Error deleting user: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if ($action === 'send_verification') {
+    if (!$canEditAdmin) {
+        header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Access denied.'));
+        exit;
+    }
+    
+    try {
+        // Generate new verification token
+        $token = bin2hex(random_bytes(32));
+        $stmt = pdo()->prepare('UPDATE users SET email_verify_token = ?, email_verified_at = NULL WHERE id = ?');
+        $stmt->execute([$token, $userId]);
+        
+        // Send verification email
+        require_once __DIR__ . '/../mailer.php';
+        $sent = send_verification_email($user['email'], $token, $user['first_name']);
+        
+        if ($sent) {
+            header('Location: /admin/user_edit.php?id=' . $userId . '&msg=' . urlencode('Email verification sent successfully.'));
+            exit;
+        } else {
+            header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Failed to send verification email.'));
+            exit;
+        }
+    } catch (Exception $e) {
+        header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Error sending verification email: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if ($action === 'send_reset') {
+    if (!$canEditAdmin) {
+        header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Access denied.'));
+        exit;
+    }
+    
+    try {
+        // Use the existing password reset functionality
+        $token = UserManagement::setPasswordResetToken($user['email']);
+        
+        if ($token) {
+            header('Location: /admin/user_edit.php?id=' . $userId . '&msg=' . urlencode('Password reset email sent successfully.'));
+            exit;
+        } else {
+            header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Failed to send password reset email.'));
+            exit;
+        }
+    } catch (Exception $e) {
+        header('Location: /admin/user_edit.php?id=' . $userId . '&err=' . urlencode('Error sending password reset email: ' . $e->getMessage()));
         exit;
     }
 }
