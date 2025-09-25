@@ -24,7 +24,13 @@ class ApplicationUI {
             
             // Admin menu goes on the right side
             if (!empty($u['is_admin'])) {
-                $navRight[] = '<a href="#" id="adminToggle">Admin</a>';
+                $navRight[] = '<div class="nav-admin-wrap">'
+                            . '<a href="#" id="adminToggle" class="nav-admin-link" aria-expanded="false">Admin</a>'
+                            . '<div id="adminMenu" class="admin-menu hidden" role="menu" aria-hidden="true">'
+                            .   '<a href="/admin/users.php" role="menuitem">Users</a>'
+                            .   '<a href="/admin/settings.php" role="menuitem">Settings</a>'
+                            . '</div>'
+                            . '</div>';
             }
             
             // Profile photo with dropdown menu
@@ -64,18 +70,34 @@ class ApplicationUI {
         echo '</head><body>';
         echo '<header><h1><a href="/index.php">'.h($siteTitle).'</a></h1><nav>'.$navHtml.'</nav></header>';
 
-        // Admin bar (second row) toggled by the "Admin" link
-        if ($u && !empty($u['is_admin'])) {
-            echo '<div id="adminBar" class="admin-bar hidden">';
-            echo $link('/admin/users.php','Users');
-            echo $link('/admin/settings.php','Settings');
-            echo '</div>';
-            echo '<script>document.addEventListener("DOMContentLoaded",function(){var t=document.getElementById("adminToggle");var b=document.getElementById("adminBar");if(t&&b){t.addEventListener("click",function(e){e.preventDefault();b.classList.toggle("hidden");});}});</script>';
-        }
-
-        // Avatar dropdown script
+        // Dropdown menu scripts
         if ($u) {
-            echo '<script>document.addEventListener("DOMContentLoaded",function(){var at=document.getElementById("avatarToggle");var m=document.getElementById("avatarMenu");function hide(){if(m){m.classList.add("hidden");m.setAttribute("aria-hidden","true");}if(at){at.setAttribute("aria-expanded","false");}}function toggle(e){e.preventDefault();if(!m)return;var isHidden=m.classList.contains("hidden");if(isHidden){m.classList.remove("hidden");m.setAttribute("aria-hidden","false");if(at)at.setAttribute("aria-expanded","true");}else{hide();}}if(at)at.addEventListener("click",toggle);document.addEventListener("click",function(e){if(!m||!at)return;var wrap=at.closest(".nav-avatar-wrap");if(wrap&&wrap.contains(e.target))return;hide();});document.addEventListener("keydown",function(e){if(e.key==="Escape")hide();});});</script>';
+            echo '<script>document.addEventListener("DOMContentLoaded",function(){';
+            
+            // Avatar dropdown script
+            echo 'var at=document.getElementById("avatarToggle");var m=document.getElementById("avatarMenu");function hideAvatar(){if(m){m.classList.add("hidden");m.setAttribute("aria-hidden","true");}if(at){at.setAttribute("aria-expanded","false");}}function toggleAvatar(e){e.preventDefault();if(!m)return;var isHidden=m.classList.contains("hidden");if(isHidden){m.classList.remove("hidden");m.setAttribute("aria-hidden","false");if(at)at.setAttribute("aria-expanded","true");}else{hideAvatar();}}if(at)at.addEventListener("click",toggleAvatar);';
+            
+            // Admin dropdown script
+            if (!empty($u['is_admin'])) {
+                echo 'var adminToggle=document.getElementById("adminToggle");var adminMenu=document.getElementById("adminMenu");function hideAdmin(){if(adminMenu){adminMenu.classList.add("hidden");adminMenu.setAttribute("aria-hidden","true");}if(adminToggle){adminToggle.setAttribute("aria-expanded","false");}}function toggleAdmin(e){e.preventDefault();if(!adminMenu)return;var isHidden=adminMenu.classList.contains("hidden");if(isHidden){adminMenu.classList.remove("hidden");adminMenu.setAttribute("aria-hidden","false");if(adminToggle)adminToggle.setAttribute("aria-expanded","true");}else{hideAdmin();}}if(adminToggle)adminToggle.addEventListener("click",toggleAdmin);';
+            }
+            
+            // Global click handler to close dropdowns
+            echo 'document.addEventListener("click",function(e){';
+            echo 'var avatarWrap=at?at.closest(".nav-avatar-wrap"):null;if(avatarWrap&&avatarWrap.contains(e.target))return;hideAvatar();';
+            if (!empty($u['is_admin'])) {
+                echo 'var adminWrap=adminToggle?adminToggle.closest(".nav-admin-wrap"):null;if(adminWrap&&adminWrap.contains(e.target))return;hideAdmin();';
+            }
+            echo '});';
+            
+            // Escape key handler
+            echo 'document.addEventListener("keydown",function(e){if(e.key==="Escape"){hideAvatar();';
+            if (!empty($u['is_admin'])) {
+                echo 'hideAdmin();';
+            }
+            echo '}});';
+            
+            echo '});</script>';
         }
         echo '<main>';
     }

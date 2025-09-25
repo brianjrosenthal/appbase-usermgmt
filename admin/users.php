@@ -15,6 +15,7 @@ header_html('Users');
 
 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
   <h2>Users</h2>
+  <a class="button" href="/admin/user_add.php">Add User</a>
 </div>
 
 <div class="card">
