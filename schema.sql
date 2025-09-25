@@ -12,7 +12,7 @@ CREATE TABLE users (
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   email VARCHAR(255) DEFAULT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL DEFAULT '',
   is_admin TINYINT(1) NOT NULL DEFAULT 0,
   email_verify_token VARCHAR(64) DEFAULT NULL,
   email_verified_at DATETIME DEFAULT NULL,
@@ -36,7 +36,8 @@ CREATE TABLE settings (
 INSERT INTO settings (key_name, value) VALUES
   ('site_title', 'CustomGPT Knowledge Base'),
   ('announcement', ''),
-  ('timezone', 'America/New_York')
+  ('timezone', 'America/New_York'),
+  ('login_image_file_id', '')
 ON DUPLICATE KEY UPDATE value=VALUES(value);
 
 -- ===== Files Storage (DB-backed uploads) =====
