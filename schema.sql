@@ -1,8 +1,5 @@
 -- customgpt application schema
 -- Create DB then use it
-CREATE DATABASE customgpt DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE customgpt;
-
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
@@ -34,7 +31,7 @@ CREATE TABLE settings (
 
 -- Default settings
 INSERT INTO settings (key_name, value) VALUES
-  ('site_title', 'CustomGPT Knowledge Base'),
+  ('site_title', 'Change This Title'),
   ('announcement', ''),
   ('timezone', 'America/New_York'),
   ('login_image_file_id', '')
